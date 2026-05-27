@@ -59,9 +59,9 @@ jobs:
         run: |
           mkdir -p rendered
           export TAG=${TAG}
-          envsubst < k8s/deployment.yaml.tpl > rendered/deployment.yaml
+          envsubst < k8s/deployment.yml.tpl > rendered/deployment.yml
 
       - name: Deploy to cluster
         run: |
-          kubectl apply -f rendered/deployment.yaml
-          kubectl apply -f k8s/service.yaml
+          kubectl apply -f rendered/deployment.yml
+          kubectl apply -f k8s/service.yml
