@@ -1,0 +1,67 @@
+name: Build & Deploy to K8s
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAMESPACE: deniskv
+  FF_IMAGE: plane-ffmpeg
+  NG_IMAGE: plane-nginx
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set TAG
+        run: echo "TAG=${GITHUB_REF_NAME}" >> $GITHUB_ENV
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & Push ffmpeg image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./ffmpeg
+          push: true
+          tags: |
+            ghcr.io/${{ env.IMAGE_NAMESPACE }}/${{ env.FF_IMAGE }}:${{ env.TAG }}
+
+      - name: Build & Push nginx image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./nginx
+          push: true
+          tags: |
+            ghcr.io/${{ env.IMAGE_NAMESPACE }}/${{ env.NG_IMAGE }}:${{ env.TAG }}
+
+      - name: Setup kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Render Kubernetes manifests
+        run: |
+          mkdir -p rendered
+          export TAG=${TAG}
+          envsubst < k8s/deployment.yaml.tpl > rendered/deployment.yaml
+
+      - name: Deploy to cluster
+        run: |
+          kubectl apply -f rendered/deployment.yaml
+          kubectl apply -f k8s/service.yaml
